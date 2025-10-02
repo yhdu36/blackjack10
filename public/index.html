@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Blackjack (10 Players • Private Hands)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0b132b; --panel:#1c2541; --accent:#5bc0be; --text:#e0e6f0; --muted:#aab3c5; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 16px 20px; background: #0f1a3a; display:flex; align-items:center; justify-content:space-between; flex-wrap: wrap; gap:8px; }
+    header h1 { margin:0; font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+    .card { background: var(--panel); border-radius: 16px; padding: 16px; box-shadow: 0 12px 30px rgba(0,0,0,0.3); }
+    .row { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 980px){ .row { grid-template-columns: 1.2fr 1fr; } }
+    .table { display: grid; gap: 16px; }
+    .dealer, .players { background: rgba(255,255,255,0.02); border-radius: 12px; padding: 12px; }
+    .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; margin: 4px 0 12px; }
+    .hand { display:flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .cardchip { background:#0e2a2d; color: #c9f7f6; border:1px solid rgba(91,192,190,.4); padding:4px 10px; border-radius:999px; font-size:12px; }
+    .controls { display:flex; gap:8px; flex-wrap: wrap; }
+    button { background: var(--accent); color: #0b1b1b; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+    button.ghost { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    input[type=text] { background: #0f1e3f; color: var(--text); border: 1px solid #33406a; padding: 10px 12px; border-radius: 10px; width: 100%; }
+    .player { border:1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 10px; }
+    .me { outline: 2px solid var(--accent); }
+    .flex { display:flex; gap:8px; align-items:center; }
+    .meta { color: var(--muted); font-size: 12px; }
+    .statusbar { display:flex; gap:12px; flex-wrap:wrap; margin:8px 0; }
+    .banner { background: #0f1a3a; border-left: 4px solid var(--accent); padding: 10px 12px; border-radius: 10px; }
+    .pill { padding:3px 8px; border-radius:999px; background:#0c2f2f; border:1px solid rgba(91,192,190,.35); font-size:12px; }
+    .muted { color: var(--muted); }
+    /* Grid for many players */
+    #players {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Blackjack — 6-Deck Shoe • Up to 10 Players</h1>
+    <div class="meta">Dealer stands on all 17 • Blackjack pays 3:2 • Private hands until settle</div>
+  </header>
+
+  <div class="container">
+    <div class="row">
+      <div class="card">
+        <div class="table">
+          <div class="dealer">
+            <div class="section-title">Dealer</div>
+            <div id="dealer-hand" class="hand"></div>
+          </div>
+
+          <div class="players">
+            <div class="section-title">Players</div>
+            <div id="players"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="lobby">
+          <div class="section-title">Lobby</div>
+          <div class="flex" style="gap:10px;margin-bottom:10px;">
+            <input id="nameInput" type="text" placeholder="Enter your name…" />
+            <button id="joinBtn">Join Table</button>
+          </div>
+          <div class="banner" id="help">Waiting to join…</div>
+        </div>
+
+        <div id="controls" style="display:none; margin-top:16px;">
+          <div class="section-title">Your Controls</div>
+          <div class="statusbar">
+            <span class="pill" id="statePill">State: waiting</span>
+            <span class="pill" id="roundPill">Round: 0</span>
+            <span class="pill" id="bankrollPill">Bankroll: —</span>
+            <span class="pill" id="betPill">Bet: 10</span>
+            <span class="pill" id="shoePill">Shoe cards: —</span>
+          </div>
+          <div class="controls">
+            <button id="startBtn" class="ghost">Start Round</button>
+            <button id="hitBtn">Hit</button>
+            <button id="standBtn">Stand</button>
+            <button id="newRoundBtn" class="ghost">New Round</button>
+          </div>
+          <div class="muted" style="margin-top:8px;">
+            Private hands: only you see your full hand until the round ends. At settle, all hands are revealed.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="./client.js"></script>
+</body>
+</html>

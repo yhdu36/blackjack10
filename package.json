@@ -1,0 +1,13 @@
+{
+  "name": "blackjack-10p-private",
+  "version": "1.0.0",
+  "description": "Up to 10 players vs dealer, 6-deck shoe, private hands until round end.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}

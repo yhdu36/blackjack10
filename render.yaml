@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: blackjack-10p
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    autoDeploy: true
