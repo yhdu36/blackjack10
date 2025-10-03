@@ -5,21 +5,22 @@ let snapshot = null;
 
 const el = (sel) => document.querySelector(sel);
 
-// Lobby elements
+// Lobby
 const joinBtn = el('#joinBtn');
 const nameInput = el('#nameInput');
 const bankrollInput = el('#bankrollInput');
 const betInput = el('#betInput');
 const help = el('#help');
 
-// Control panel
+// Controls
 const controls = el('#controls');
-const startBtn = el('#startBtn');
+const startBtn = el('#startBtn'); // "Ready / 准备"
 const hitBtn = el('#hitBtn');
 const standBtn = el('#standBtn');
 const newRoundBtn = el('#newRoundBtn');
 const updateBetBtn = el('#updateBetBtn');
 const updateBankrollBtn = el('#updateBankrollBtn');
+const allInBetBtn = el('#allInBetBtn');
 const editBet = el('#editBet');
 const editBankroll = el('#editBankroll');
 
@@ -58,6 +59,7 @@ socket.on('joined', (player) => {
   controls.style.display = 'block';
   editBankroll.value = player.bankroll ?? '';
   editBet.value = player.bet ?? '';
+  help.textContent = 'Press Ready when finished editing / 编辑完点击“准备”';
 });
 
 socket.on('errorMessage', (msg) => {
@@ -70,11 +72,19 @@ socket.on('state', (s) => {
   render();
 });
 
-startBtn.onclick = () => socket.emit('start');
+// Ready (start) -> requires all players to press
+startBtn.onclick = () => {
+  startBtn.disabled = true;
+  startBtn.textContent = 'Ready ✓ / 已准备';
+  socket.emit('ready');
+};
+
+// Player actions
 hitBtn.onclick = () => socket.emit('hit');
 standBtn.onclick = () => socket.emit('stand');
 newRoundBtn.onclick = () => socket.emit('newRound');
 
+// Edit bankroll/bet
 updateBetBtn.onclick = () => {
   const val = parseInt(editBet.value, 10);
   if (!Number.isFinite(val) || val < 1) {
@@ -91,6 +101,9 @@ updateBankrollBtn.onclick = () => {
   }
   socket.emit('setBankroll', val);
 };
+
+// All-in: bet = bankroll
+allInBetBtn.onclick = () => socket.emit('allIn');
 
 // ---- Render ----
 function renderCard(c) {
@@ -126,13 +139,14 @@ function render() {
     const dealerBJ = snapshot.dealer?.hand && snapshot.dealer.hand.length === 2 && snapshot.dealerTotal === 21;
     const anyPlayerBJ = snapshot.players?.some(p => p.blackjack);
     let cls = 'result-info';
-    let label = `Dealer stands at ${snapshot.dealerTotal} / 庄家停在 ${snapshot.dealerTotal}`;
+    let label = snapshot.dealerTotal != null
+      ? `Dealer stands at ${snapshot.dealerTotal} / 庄家停在 ${snapshot.dealerTotal}` : 'Dealer acts / 庄家行动';
 
     if (snapshot.dealerBust) {
       cls = 'result-lose';
       label = 'Dealer Bust / 庄家爆牌';
     } else if (dealerBJ && anyPlayerBJ) {
-      cls = 'result-push'; // 你提到的“同时21点”显示绿色
+      cls = 'result-push'; // simultaneous BJs show green
       label = 'Push with player blackjack / 与玩家天生黑杰克平局';
     } else if (dealerBJ) {
       cls = 'result-blackjack';
@@ -156,11 +170,11 @@ function render() {
     const status =
       p.blackjack ? 'Blackjack!' :
       p.busted ? 'Busted' :
-      (p.hand.length ? `Total ${hv}` : '—');
+      (p.hand.length ? `Total ${hv}` : (p.ready ? 'Ready' : 'Not ready'));
 
     const title = document.createElement('div');
     title.className = 'flex';
-    title.innerHTML = `<strong>${p.name}</strong> <span class="meta">Bet 下注 ${p.bet} • ${status}</span>`;
+    title.innerHTML = `<strong>${p.name}</strong> <span class="meta">Bet 下注 ${p.bet} • ${status}${p.ready && snapshot.state==='waiting' ? ' • ✅' : ''}</span>`;
     wrap.appendChild(title);
 
     const handEl = document.createElement('div');
@@ -194,22 +208,33 @@ function render() {
   bankrollPill.textContent = `Bankroll / 资金: ${meFull ? meFull.bankroll : '—'}`;
   betPill.textContent = `Bet / 下注: ${meFull ? meFull.bet : '—'}`;
 
-  // Editing allowed only while waiting
-  const canEdit = snapshot.state === 'waiting' && !!meFull;
+  // Ready UI: waiting state only
+  const canReady = snapshot.state === 'waiting' && !!meFull && meFull.bet >= 1 && meFull.bet <= meFull.bankroll;
+  if (canReady && !meFull.ready) {
+    startBtn.disabled = false;
+    startBtn.textContent = 'Ready / 准备';
+  } else if (snapshot.state === 'waiting' && meFull?.ready) {
+    startBtn.disabled = true;
+    startBtn.textContent = 'Ready ✓ / 已准备';
+  } else if (snapshot.state !== 'waiting') {
+    startBtn.disabled = true;
+    startBtn.textContent = 'Ready / 准备';
+  }
+
+  // Editing allowed only while waiting and not yet ready
+  const canEdit = snapshot.state === 'waiting' && !!meFull && !meFull.ready;
   editBet.disabled = !canEdit;
   editBankroll.disabled = !canEdit;
   updateBetBtn.disabled = !canEdit;
   updateBankrollBtn.disabled = !canEdit;
+  allInBetBtn.disabled = !canEdit;
 
   if (canEdit) {
     if (meFull && document.activeElement !== editBet) editBet.value = meFull.bet ?? '';
     if (meFull && document.activeElement !== editBankroll) editBankroll.value = meFull.bankroll ?? '';
   }
 
-  // Buttons: simultaneous action eligibility
-  const canStart = snapshot.state === 'waiting' && snapshot.players.length >= 1 && snapshot.players.length <= 10;
-  startBtn.disabled = !canStart;
-
+  // Action buttons: simultaneous phase
   const canAct = (snapshot.state === 'playersAct' && meFull && !meFull.done && !meFull.busted && !meFull.blackjack);
   hitBtn.disabled = !canAct;
   standBtn.disabled = !canAct;

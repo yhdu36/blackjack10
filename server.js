@@ -16,11 +16,10 @@ const SHOE_DECKS = 6;         // 6-deck shoe; reshuffle between rounds only
 const DEFAULT_BANKROLL = 100; // default starting bankroll
 const BASE_BET = 10;          // default bet
 
-// ----- Game State -----
 // states: waiting | dealing | playersAct | dealerTurn | settling
 let table = {
   state: 'waiting',
-  players: [],      // {id, name, hand:[], bet, done, busted, blackjack, standing, bankroll, outcome}
+  players: [],      // {id, name, hand:[], bet, done, busted, blackjack, standing, bankroll, outcome, ready}
   dealer: { hand: [] },
   deck: [],
   round: 0,
@@ -90,7 +89,8 @@ function makeViewFor(playerId, revealAll = false) {
       blackjack: p.blackjack,
       standing: p.standing,
       bankroll: p.bankroll,
-      outcome: p.outcome || null
+      outcome: p.outcome || null,
+      ready: !!p.ready
     };
     if (revealAll) return { ...base, hand: p.hand };
     if (p.id === playerId) return { ...base, hand: p.hand };
@@ -123,6 +123,10 @@ function canStart() {
   return table.players.length >= MIN_PLAYERS && table.players.length <= MAX_PLAYERS;
 }
 
+function everyoneReady() {
+  return canStart() && table.players.every(p => p.ready === true);
+}
+
 function resetRound() {
   table.deck = createDeck(SHOE_DECKS);
   table.dealer = { hand: [] };
@@ -135,6 +139,7 @@ function resetRound() {
     p.blackjack = false;
     p.standing = false;
     p.outcome = null;
+    // keep bankroll/bet, clamp and ensure bet<=bankroll
     if (typeof p.bankroll !== 'number' || p.bankroll < 1) p.bankroll = DEFAULT_BANKROLL;
     if (typeof p.bet !== 'number' || p.bet < 1) p.bet = BASE_BET;
     if (p.bet > p.bankroll) p.bet = p.bankroll;
@@ -150,15 +155,14 @@ function maybeAdvanceToDealer() {
 
   if (allLocked) {
     table.state = 'dealerTurn';
-    broadcast();          // 进入庄家前先刷新一次，确保玩家看到最终状态（含爆牌/停牌）
+    broadcast();          // refresh before dealer plays
     dealerPlayThenSettle();
   } else {
-    broadcast();          // 还没全员结束，也刷新一次，立刻显示爆牌/停牌
+    broadcast();          // still in playersAct—show bust/stand immediately
   }
 }
 
 function startRound() {
-  if (!canStart()) return;
   table.round += 1;
   table.state = 'dealing';
   resetRound();
@@ -245,6 +249,14 @@ function dealerPlayThenSettle() {
   broadcast();
 }
 
+function tryStartIfEveryoneReady() {
+  if (table.state === 'waiting' && everyoneReady()) {
+    startRound();
+  } else {
+    broadcast();
+  }
+}
+
 // ----- Socket handlers -----
 io.on('connection', (socket) => {
   // Join with optional name/bankroll/bet
@@ -278,14 +290,29 @@ io.on('connection', (socket) => {
       blackjack: false,
       standing: false,
       bankroll,
-      outcome: null
+      outcome: null,
+      ready: false
     };
     table.players.push(player);
     socket.emit('joined', player);
     broadcast();
   });
 
-  // Edit bet/bankroll only while waiting
+  // Ready confirmation (single click to set true)
+  socket.on('ready', () => {
+    if (table.state !== 'waiting') return;
+    const p = table.players.find(pl => pl.id === socket.id);
+    if (!p) return;
+
+    // Ensure valid before ready
+    if (p.bet < 1) p.bet = 1;
+    if (p.bet > p.bankroll) p.bet = p.bankroll;
+
+    p.ready = true;
+    tryStartIfEveryoneReady();
+  });
+
+  // Edit bet/bankroll only while waiting; editing un-readies the player
   socket.on('setBet', (betVal) => {
     if (table.state !== 'waiting') return;
     const p = table.players.find(pl => pl.id === socket.id);
@@ -296,6 +323,7 @@ io.on('connection', (socket) => {
       return;
     }
     p.bet = bet;
+    p.ready = false; // editing cancels ready
     broadcast();
   });
 
@@ -310,6 +338,17 @@ io.on('connection', (socket) => {
     }
     p.bankroll = roll;
     if (p.bet > p.bankroll) p.bet = p.bankroll;
+    p.ready = false; // editing cancels ready
+    broadcast();
+  });
+
+  // All-in sets bet = bankroll (waiting only)
+  socket.on('allIn', () => {
+    if (table.state !== 'waiting') return;
+    const p = table.players.find(pl => pl.id === socket.id);
+    if (!p) return;
+    p.bet = Math.max(1, p.bankroll);
+    p.ready = false; // change requires ready again
     broadcast();
   });
 
@@ -324,10 +363,10 @@ io.on('connection', (socket) => {
     if (hv.total > 21) {
       p.busted = true;
       p.done = true;
-      broadcast();          // 立刻显示爆牌
+      broadcast();          // show bust immediately
       maybeAdvanceToDealer();
     } else {
-      broadcast();          // 正常要牌也刷新
+      broadcast();
     }
   });
 
@@ -338,19 +377,11 @@ io.on('connection', (socket) => {
 
     p.standing = true;
     p.done = true;
-    broadcast();            // 立刻反映“停牌”，并禁用按钮
+    broadcast();            // reflect stand instantly
     maybeAdvanceToDealer();
   });
 
-  socket.on('start', () => {
-    if (table.state !== 'waiting') return;
-    if (!canStart()) {
-      socket.emit('errorMessage', `Need ${MIN_PLAYERS}–${MAX_PLAYERS} players to start.`);
-      return;
-    }
-    startRound();
-  });
-
+  // Begin next round (back to waiting; everyone un-ready)
   socket.on('newRound', () => {
     if (table.state !== 'settling') return;
     table.state = 'waiting';
@@ -366,6 +397,7 @@ io.on('connection', (socket) => {
       p.outcome = null;
       if (p.bet < 1) p.bet = 1;
       if (p.bet > p.bankroll) p.bet = p.bankroll;
+      p.ready = false; // new round: must press Ready again
     });
     broadcast();
   });
@@ -386,6 +418,9 @@ io.on('connection', (socket) => {
         };
       } else if (table.state === 'playersAct') {
         maybeAdvanceToDealer();
+      } else if (table.state === 'waiting') {
+        // if someone leaves in waiting, just re-check readiness
+        tryStartIfEveryoneReady();
       }
       broadcast();
     }

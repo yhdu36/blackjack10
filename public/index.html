@@ -32,6 +32,7 @@
     .banner { background:#0f1a3a; border-left:4px solid var(--accent); padding:10px 12px; border-radius:10px; }
     .pill { padding:3px 8px; border-radius:999px; background:#0c2f2f; border:1px solid rgba(91,192,190,.35); font-size:12px; }
     .muted { color: var(--muted); }
+    .hstack { display:flex; align-items:center; gap:8px; }
     #players { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; }
 
     /* Small stat badges (boxed look) */
@@ -55,17 +56,21 @@
       box-shadow: 0 10px 24px rgba(0,0,0,0.25);
       border: 1px solid rgba(255,255,255,0.15);
     }
-    /* Colors: Win = yellow, Lose = red, Push = green */
     .result-win       { background: #3a3306; color: #ffe36a; border-color: rgba(255,227,106,0.45); }
     .result-lose      { background: #3a0e10; color: #ff7a7a; border-color: rgba(255,122,122,0.45); }
     .result-push      { background: #0d3a26; color: #7cffb1; border-color: rgba(124,255,177,0.45); }
-    /* Optional: special cases */
     .result-blackjack { background: #2b1a04; color: #ffd26a; border-color: rgba(255,210,106,0.45); }
     .result-bust      { background: #3a0e10; color: #ff7a7a; border-color: rgba(255,122,122,0.45); }
     .result-info      { background: #0f1a3a; color: #a7c7ff; border-color: rgba(167,199,255,0.3); }
     .result-chip { padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; font-size: 11px; opacity: 0.9; }
 
-    .hstack { display:flex; align-items:center; gap:8px; }
+    /* Yellow All-in button */
+    .btn-allin {
+      background: #ffda3a; /* yellow */
+      color: #251e00;
+      border: 1px solid rgba(255, 218, 58, 0.6);
+    }
+    .btn-allin:hover { filter: brightness(1.05); }
   </style>
 </head>
 <body>
@@ -82,7 +87,7 @@
           <div class="dealer">
             <div class="section-title">Dealer / 庄家</div>
             <div id="dealer-hand" class="hand"></div>
-            <div id="dealer-total" class="stat-badge stat-accent" style="margin-top:8px;"></div>
+            <div id="dealer-total" class="stat-badge stat-accent" style="margin-top:8px;">Dealer total / 庄家点数: —</div>
             <div id="dealer-status" style="margin-top:10px;"></div>
           </div>
 
@@ -115,23 +120,27 @@
           <div class="statusbar">
             <span class="pill" id="statePill">State / 状态: waiting</span>
             <span class="pill" id="roundPill">Round / 回合: 0</span>
-            <span class="pill" id="bankrollPill" class="pill">Bankroll / 资金: —</span>
-            <span class="pill" id="betPill" class="pill">Bet / 下注: 10</span>
-            <span class="pill" id="shoePill" class="pill">Shoe cards / 鞋中余牌: —</span>
+            <span class="pill" id="bankrollPill">Bankroll / 资金: —</span>
+            <span class="pill" id="betPill">Bet / 下注: 10</span>
+            <span class="pill" id="shoePill">Shoe cards / 鞋中余牌: —</span>
           </div>
 
           <!-- Editable bankroll & bet while waiting -->
           <div class="hstack" style="margin:8px 0;">
             <input id="editBankroll" type="number" min="1" step="1" placeholder="Bankroll / 资金" />
-            <button id="updateBankrollBtn" class="ghost">Update Bankroll <br> 更新资金</button>
+            <button id="updateBankrollBtn" class="ghost">Update Bankroll / 更新资金</button>
           </div>
+
           <div class="hstack" style="margin:8px 0 14px;">
             <input id="editBet" type="number" min="1" step="1" placeholder="Bet for next round / 下一局下注" />
-            <button id="updateBetBtn" class="ghost">Update Bet <br> 更新下注</button>
+            <button id="updateBetBtn" class="ghost">Update Bet / 更新下注</button>
+            <!-- Yellow All-in button on the same line -->
+            <button id="allInBetBtn" class="btn-allin">All-in / 全下</button>
           </div>
 
           <div class="controls" style="margin-bottom:8px;">
-            <button id="startBtn" class="ghost">Start Round / 开始发牌</button>
+            <!-- Ready button (id kept as startBtn for JS wiring) -->
+            <button id="startBtn" class="ghost">Ready / 准备</button>
             <button id="hitBtn">Hit / 要牌</button>
             <button id="standBtn">Stand / 停牌</button>
             <button id="newRoundBtn" class="ghost">New Round / 新一局</button>
@@ -140,15 +149,15 @@
           <div style="margin-top:6px;">
             <div class="section-title">How to Play / 游戏说明</div>
             <ol class="muted" style="margin-top:6px;">
-              <li><strong>How to start:</strong> At least 1–10 players join, then click <em>Start Round</em>.  </li>
-              <li><strong>Player:</strong> Players can update their bankroll and bet before each round. During the player phase, Hit or Stand freely。</li>
+              <li><strong>How to start:</strong> At least 1–10 players join, The round starts only after all players press <em>Ready</em>.  </li>
+              <li><strong>Player:</strong> Player can update bankroll and bet before "Ready". During the turn, player may Hit or Stand freely. </li>
               <li><strong>Dealer:</strong> Dealer reveals and plays after all players finish; stands on all 17.</li>
               <li><strong>Payouts:</strong> Blackjack pays 3:2; push on ties. Default bet is <strong>10</strong>. </li>
             </ol>
             <ol class="muted" style="margin-top:6px;">
-              <li><strong>如何开始：</strong> 至少 1–10 名玩家加入后，点击 <em>开始发牌</em>。 </li>
-              <li><strong>每轮操作：</strong> 玩家可在每局开始前自由修改资金和下注。在玩家阶段可自由要牌或停牌</li>
-              <li><strong>庄家：</strong> 所有玩家结束后，庄家亮牌并操作；庄家在 17 点及以上停牌。</li>
+              <li><strong>如何开始：</strong> 至少 1–10 名玩家加入后，每位玩家需先点<em>准备</em>后才开始。 </li>
+              <li><strong>轮流操作：</strong> 每局准备之前可以更新资金和下注。在玩家阶段可自由要牌或停牌。</li>
+              <li><strong>庄家：</strong> 所有玩家结束后，庄家亮牌并操作；庄家在17停牌。</li>
               <li><strong>结算：</strong> 天生黑杰克按 3:2 赔付；平局为推注。默认下注 <strong>10</strong>。</li>
             </ol>
           </div>
@@ -158,6 +167,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="./client.js?v=dealer-status-1"></script>
+  <script src="./client.js?v=ready-allin-2"></script>
 </body>
 </html>
