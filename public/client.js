@@ -5,39 +5,66 @@ let snapshot = null;
 
 const el = (sel) => document.querySelector(sel);
 
+// Lobby elements
 const joinBtn = el('#joinBtn');
 const nameInput = el('#nameInput');
+const bankrollInput = el('#bankrollInput');
+const betInput = el('#betInput');
 const help = el('#help');
 
+// Control panel
 const controls = el('#controls');
 const startBtn = el('#startBtn');
 const hitBtn = el('#hitBtn');
 const standBtn = el('#standBtn');
 const newRoundBtn = el('#newRoundBtn');
+const updateBetBtn = el('#updateBetBtn');
+const updateBankrollBtn = el('#updateBankrollBtn');
+const editBet = el('#editBet');
+const editBankroll = el('#editBankroll');
 
+// Pills
 const statePill = el('#statePill');
 const roundPill = el('#roundPill');
 const bankrollPill = el('#bankrollPill');
 const betPill = el('#betPill');
 const shoePill = el('#shoePill');
 
+// Dealer UI
 const dealerHand = el('#dealer-hand');
+const dealerTotalEl = el('#dealer-total');
+const dealerStatus = el('#dealer-status');
+
+// Players container
 const playersDiv = el('#players');
 
+// ---- Lobby join ----
 joinBtn.onclick = () => {
-  socket.emit('join', nameInput.value.trim());
+  const name = nameInput.value.trim();
+  const bankrollVal = parseInt(bankrollInput.value, 10);
+  const betVal = parseInt(betInput.value, 10);
+
+  const payload = {
+    name,
+    bankroll: Number.isFinite(bankrollVal) && bankrollVal > 0 ? bankrollVal : undefined,
+    bet: Number.isFinite(betVal) && betVal > 0 ? betVal : undefined
+  };
+  socket.emit('join', payload);
 };
 
 socket.on('joined', (player) => {
   me = player;
   el('#lobby').style.display = 'none';
   controls.style.display = 'block';
+  editBankroll.value = player.bankroll ?? '';
+  editBet.value = player.bet ?? '';
 });
 
 socket.on('errorMessage', (msg) => {
   help.textContent = msg;
 });
 
+// ---- State & Buttons ----
 socket.on('state', (s) => {
   snapshot = s;
   render();
@@ -48,6 +75,24 @@ hitBtn.onclick = () => socket.emit('hit');
 standBtn.onclick = () => socket.emit('stand');
 newRoundBtn.onclick = () => socket.emit('newRound');
 
+updateBetBtn.onclick = () => {
+  const val = parseInt(editBet.value, 10);
+  if (!Number.isFinite(val) || val < 1) {
+    help.textContent = 'Enter a valid bet (>=1). / 请输入有效下注（≥1）。';
+    return;
+  }
+  socket.emit('setBet', val);
+};
+updateBankrollBtn.onclick = () => {
+  const val = parseInt(editBankroll.value, 10);
+  if (!Number.isFinite(val) || val < 1) {
+    help.textContent = 'Enter a valid bankroll (>=1). / 请输入有效资金（≥1）。';
+    return;
+  }
+  socket.emit('setBankroll', val);
+};
+
+// ---- Render ----
 function renderCard(c) {
   const span = document.createElement('span');
   span.className = 'cardchip';
@@ -58,32 +103,64 @@ function renderCard(c) {
 function render() {
   if (!snapshot) return;
 
-  // Top status
-  statePill.textContent = `State: ${snapshot.state}`;
-  roundPill.textContent = `Round: ${snapshot.round}`;
-  shoePill.textContent = `Shoe cards: ${typeof snapshot.deckCount === 'number' ? snapshot.deckCount : '—'}`;
+  // Status
+  const stateLabel = snapshot.state === 'playersAct' ? 'playersAct (simultaneous)' : snapshot.state;
+  statePill.textContent = `State / 状态: ${stateLabel}`;
+  roundPill.textContent = `Round / 回合: ${snapshot.round}`;
+  shoePill.textContent = `Shoe cards / 鞋中余牌: ${typeof snapshot.deckCount === 'number' ? snapshot.deckCount : '—'}`;
 
   // Dealer
   dealerHand.innerHTML = '';
   snapshot.dealer.hand.forEach(c => dealerHand.appendChild(renderCard(c)));
 
+  if (snapshot.dealerTotal != null) {
+    dealerTotalEl.textContent = `Dealer total / 庄家点数: ${snapshot.dealerTotal}${snapshot.dealerBust ? ' (Bust / 爆牌)' : ''}`;
+  } else {
+    dealerTotalEl.textContent = 'Dealer total / 庄家点数: —';
+  }
+
+  // Dealer status banner
+  dealerStatus.innerHTML = '';
+  const showDealerBanner = snapshot.state === 'dealerTurn' || snapshot.state === 'settling';
+  if (showDealerBanner) {
+    const dealerBJ = snapshot.dealer?.hand && snapshot.dealer.hand.length === 2 && snapshot.dealerTotal === 21;
+    const anyPlayerBJ = snapshot.players?.some(p => p.blackjack);
+    let cls = 'result-info';
+    let label = `Dealer stands at ${snapshot.dealerTotal} / 庄家停在 ${snapshot.dealerTotal}`;
+
+    if (snapshot.dealerBust) {
+      cls = 'result-lose';
+      label = 'Dealer Bust / 庄家爆牌';
+    } else if (dealerBJ && anyPlayerBJ) {
+      cls = 'result-push'; // 你提到的“同时21点”显示绿色
+      label = 'Push with player blackjack / 与玩家天生黑杰克平局';
+    } else if (dealerBJ) {
+      cls = 'result-blackjack';
+      label = 'Dealer Blackjack / 庄家天生黑杰克';
+    }
+
+    const banner = document.createElement('div');
+    banner.className = `result-banner ${cls}`;
+    banner.innerHTML = `<span class="result-chip">Dealer / 庄家</span><span>${label}</span>`;
+    dealerStatus.appendChild(banner);
+  }
+
   // Players
   playersDiv.innerHTML = '';
-  snapshot.players.forEach((p, idx) => {
+  snapshot.players.forEach((p) => {
     const wrap = document.createElement('div');
     wrap.className = 'player';
     if (me && p.id === me.id) wrap.classList.add('me');
 
     const hv = handTotal(p.hand);
-    const title = document.createElement('div');
-    title.className = 'flex';
-    const tag = (snapshot.state === 'playerTurn' && snapshot.currentIdx === idx) ? ' • <em>Acting</em>' : '';
     const status =
       p.blackjack ? 'Blackjack!' :
       p.busted ? 'Busted' :
       (p.hand.length ? `Total ${hv}` : '—');
 
-    title.innerHTML = `<strong>${p.name}</strong> <span class="meta">Bet ${p.bet} • ${status}${tag}</span>`;
+    const title = document.createElement('div');
+    title.className = 'flex';
+    title.innerHTML = `<strong>${p.name}</strong> <span class="meta">Bet 下注 ${p.bet} • ${status}</span>`;
     wrap.appendChild(title);
 
     const handEl = document.createElement('div');
@@ -91,33 +168,53 @@ function render() {
     p.hand.forEach(c => handEl.appendChild(renderCard(c)));
     wrap.appendChild(handEl);
 
+    // Big result banner during settling
+    if (snapshot.state === 'settling' && p.outcome) {
+      const banner = document.createElement('div');
+      const { cssClass, label } = outcomeStyle(p.outcome);
+      banner.className = `result-banner ${cssClass}`;
+      banner.innerHTML = `
+        <span class="result-chip">Result / 结果</span>
+        <span>${label}</span>
+      `;
+      wrap.appendChild(banner);
+    }
+
+    // Bankroll as boxed badge
     const bank = document.createElement('div');
-    bank.className = 'meta';
-    bank.textContent = `Bankroll: ${typeof p.bankroll==='number' ? p.bankroll : '—'}`;
+    bank.className = 'stat-badge';
+    bank.textContent = `Bankroll / 资金: ${typeof p.bankroll==='number' ? p.bankroll : '—'}`;
     wrap.appendChild(bank);
 
     playersDiv.appendChild(wrap);
   });
 
-  // My info pills
+  // My pills + prefill editors
   const meFull = snapshot.players.find(p => me && p.id === me.id);
-  bankrollPill.textContent = `Bankroll: ${meFull ? meFull.bankroll : '—'}`;
-  betPill.textContent = `Bet: ${meFull ? meFull.bet : '—'}`;
+  bankrollPill.textContent = `Bankroll / 资金: ${meFull ? meFull.bankroll : '—'}`;
+  betPill.textContent = `Bet / 下注: ${meFull ? meFull.bet : '—'}`;
 
-  // Buttons enable/disable
+  // Editing allowed only while waiting
+  const canEdit = snapshot.state === 'waiting' && !!meFull;
+  editBet.disabled = !canEdit;
+  editBankroll.disabled = !canEdit;
+  updateBetBtn.disabled = !canEdit;
+  updateBankrollBtn.disabled = !canEdit;
+
+  if (canEdit) {
+    if (meFull && document.activeElement !== editBet) editBet.value = meFull.bet ?? '';
+    if (meFull && document.activeElement !== editBankroll) editBankroll.value = meFull.bankroll ?? '';
+  }
+
+  // Buttons: simultaneous action eligibility
   const canStart = snapshot.state === 'waiting' && snapshot.players.length >= 1 && snapshot.players.length <= 10;
   startBtn.disabled = !canStart;
 
-  const myTurn = (snapshot.state === 'playerTurn' && meFull && isMyTurn(meFull));
-  hitBtn.disabled = !myTurn;
-  standBtn.disabled = !myTurn;
+  const canAct = (snapshot.state === 'playersAct' && meFull && !meFull.done && !meFull.busted && !meFull.blackjack);
+  hitBtn.disabled = !canAct;
+  standBtn.disabled = !canAct;
 
   newRoundBtn.disabled = !(snapshot.state === 'settling');
-}
-
-function isMyTurn(meFull) {
-  const idx = snapshot.players.findIndex(p => p.id === meFull.id);
-  return idx === snapshot.currentIdx && !meFull.done && !meFull.blackjack && !meFull.busted;
 }
 
 function handTotal(hand) {
@@ -131,4 +228,14 @@ function handTotal(hand) {
   });
   while (total > 21 && aces > 0) { total -= 10; aces--; }
   return total;
+}
+
+function outcomeStyle(outcome) {
+  const o = String(outcome).toLowerCase();
+  if (o.includes('blackjack')) return { cssClass: 'result-blackjack', label: 'Blackjack (3:2) / 天生黑杰克' };
+  if (o.includes('win'))       return { cssClass: 'result-win',       label: 'Win / 胜利' };
+  if (o.includes('lose'))      return { cssClass: 'result-lose',      label: 'Lose / 失利' };
+  if (o.includes('push'))      return { cssClass: 'result-push',      label: 'Push / 和局' };
+  if (o.includes('bust'))      return { cssClass: 'result-bust',      label: 'Bust / 爆牌' };
+  return { cssClass: 'result-info', label: outcome };
 }

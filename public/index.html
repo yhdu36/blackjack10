@@ -7,8 +7,8 @@
   <style>
     :root { --bg:#0b132b; --panel:#1c2541; --accent:#5bc0be; --text:#e0e6f0; --muted:#aab3c5; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
-    header { padding: 16px 20px; background: #0f1a3a; display:flex; align-items:center; justify-content:space-between; flex-wrap: wrap; gap:8px; }
+    body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 16px 20px; background: #0f1a3a; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
     header h1 { margin:0; font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
     .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
     .card { background: var(--panel); border-radius: 16px; padding: 16px; box-shadow: 0 12px 30px rgba(0,0,0,0.3); }
@@ -18,26 +18,54 @@
     .dealer, .players { background: rgba(255,255,255,0.02); border-radius: 12px; padding: 12px; }
     .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; margin: 4px 0 12px; }
     .hand { display:flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .cardchip { background:#0e2a2d; color: #c9f7f6; border:1px solid rgba(91,192,190,.4); padding:4px 10px; border-radius:999px; font-size:12px; }
+    .cardchip { background:#0e2a2d; color:#c9f7f6; border:1px solid rgba(91,192,190,.4); padding:4px 10px; border-radius:999px; font-size:12px; }
     .controls { display:flex; gap:8px; flex-wrap: wrap; }
     button { background: var(--accent); color: #0b1b1b; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 700; cursor: pointer; }
     button.ghost { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
-    input[type=text] { background: #0f1e3f; color: var(--text); border: 1px solid #33406a; padding: 10px 12px; border-radius: 10px; width: 100%; }
-    .player { border:1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 10px; }
+    input[type=text], input[type=number] { background:#0f1e3f; color:var(--text); border:1px solid #33406a; padding:10px 12px; border-radius:10px; width:100%; }
+    .player { border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:10px; }
     .me { outline: 2px solid var(--accent); }
     .flex { display:flex; gap:8px; align-items:center; }
     .meta { color: var(--muted); font-size: 12px; }
     .statusbar { display:flex; gap:12px; flex-wrap:wrap; margin:8px 0; }
-    .banner { background: #0f1a3a; border-left: 4px solid var(--accent); padding: 10px 12px; border-radius: 10px; }
+    .banner { background:#0f1a3a; border-left:4px solid var(--accent); padding:10px 12px; border-radius:10px; }
     .pill { padding:3px 8px; border-radius:999px; background:#0c2f2f; border:1px solid rgba(91,192,190,.35); font-size:12px; }
     .muted { color: var(--muted); }
-    /* Grid for many players */
-    #players {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
+    #players { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; }
+
+    /* Small stat badges (boxed look) */
+    .stat-badge {
+      display:inline-block; padding:6px 10px; border-radius:10px;
+      border:1px solid rgba(255,255,255,0.18); background:#0f1e3f; color:#dfe7ff; font-size:12px;
     }
+    .stat-accent { border-color: rgba(91,192,190,.45); }
+
+    /* Big result banners */
+    .result-banner {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    /* Colors: Win = yellow, Lose = red, Push = green */
+    .result-win       { background: #3a3306; color: #ffe36a; border-color: rgba(255,227,106,0.45); }
+    .result-lose      { background: #3a0e10; color: #ff7a7a; border-color: rgba(255,122,122,0.45); }
+    .result-push      { background: #0d3a26; color: #7cffb1; border-color: rgba(124,255,177,0.45); }
+    /* Optional: special cases */
+    .result-blackjack { background: #2b1a04; color: #ffd26a; border-color: rgba(255,210,106,0.45); }
+    .result-bust      { background: #3a0e10; color: #ff7a7a; border-color: rgba(255,122,122,0.45); }
+    .result-info      { background: #0f1a3a; color: #a7c7ff; border-color: rgba(167,199,255,0.3); }
+    .result-chip { padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; font-size: 11px; opacity: 0.9; }
+
+    .hstack { display:flex; align-items:center; gap:8px; }
   </style>
 </head>
 <body>
@@ -48,47 +76,81 @@
 
   <div class="container">
     <div class="row">
+      <!-- Left: table -->
       <div class="card">
         <div class="table">
           <div class="dealer">
-            <div class="section-title">Dealer</div>
+            <div class="section-title">Dealer / 庄家</div>
             <div id="dealer-hand" class="hand"></div>
+            <div id="dealer-total" class="stat-badge stat-accent" style="margin-top:8px;"></div>
+            <div id="dealer-status" style="margin-top:10px;"></div>
           </div>
 
           <div class="players">
-            <div class="section-title">Players</div>
+            <div class="section-title">Players / 玩家</div>
             <div id="players"></div>
           </div>
         </div>
       </div>
 
+      <!-- Right: lobby/controls -->
       <div class="card">
+        <!-- Lobby -->
         <div id="lobby">
           <div class="section-title">Lobby</div>
-          <div class="flex" style="gap:10px;margin-bottom:10px;">
-            <input id="nameInput" type="text" placeholder="Enter your name…" />
-            <button id="joinBtn">Join Table</button>
+          <div class="hstack" style="margin-bottom:8px;">
+            <input id="nameInput" type="text" placeholder="Enter your name / 输入你的名字…" />
           </div>
-          <div class="banner" id="help">Waiting to join…</div>
+          <div class="hstack" style="margin-bottom:8px;">
+            <input id="bankrollInput" type="number" min="1" step="1" placeholder="Starting Bankroll / 初始资金 (默认 100)" />
+            <input id="betInput" type="number" min="1" step="1" placeholder="Bet / 下注 (默认 10)" />
+            <button id="joinBtn">Join Table / 加入牌桌</button>
+          </div>
+          <div class="banner" id="help">Waiting to join… / 等待加入…</div>
         </div>
 
+        <!-- Controls -->
         <div id="controls" style="display:none; margin-top:16px;">
-          <div class="section-title">Your Controls</div>
+          <div class="section-title">Controls / 控制台</div>
           <div class="statusbar">
-            <span class="pill" id="statePill">State: waiting</span>
-            <span class="pill" id="roundPill">Round: 0</span>
-            <span class="pill" id="bankrollPill">Bankroll: —</span>
-            <span class="pill" id="betPill">Bet: 10</span>
-            <span class="pill" id="shoePill">Shoe cards: —</span>
+            <span class="pill" id="statePill">State / 状态: waiting</span>
+            <span class="pill" id="roundPill">Round / 回合: 0</span>
+            <span class="pill" id="bankrollPill" class="pill">Bankroll / 资金: —</span>
+            <span class="pill" id="betPill" class="pill">Bet / 下注: 10</span>
+            <span class="pill" id="shoePill" class="pill">Shoe cards / 鞋中余牌: —</span>
           </div>
-          <div class="controls">
-            <button id="startBtn" class="ghost">Start Round</button>
-            <button id="hitBtn">Hit</button>
-            <button id="standBtn">Stand</button>
-            <button id="newRoundBtn" class="ghost">New Round</button>
+
+          <!-- Editable bankroll & bet while waiting -->
+          <div class="hstack" style="margin:8px 0;">
+            <input id="editBankroll" type="number" min="1" step="1" placeholder="Bankroll / 资金" />
+            <button id="updateBankrollBtn" class="ghost">Update Bankroll <br> 更新资金</button>
           </div>
-          <div class="muted" style="margin-top:8px;">
-            Private hands: only you see your full hand until the round ends. At settle, all hands are revealed.
+          <div class="hstack" style="margin:8px 0 14px;">
+            <input id="editBet" type="number" min="1" step="1" placeholder="Bet for next round / 下一局下注" />
+            <button id="updateBetBtn" class="ghost">Update Bet <br> 更新下注</button>
+          </div>
+
+          <div class="controls" style="margin-bottom:8px;">
+            <button id="startBtn" class="ghost">Start Round / 开始发牌</button>
+            <button id="hitBtn">Hit / 要牌</button>
+            <button id="standBtn">Stand / 停牌</button>
+            <button id="newRoundBtn" class="ghost">New Round / 新一局</button>
+          </div>
+
+          <div style="margin-top:6px;">
+            <div class="section-title">How to Play / 游戏说明</div>
+            <ol class="muted" style="margin-top:6px;">
+              <li><strong>How to start:</strong> At least 1–10 players join, then click <em>Start Round</em>.  </li>
+              <li><strong>Turn order:</strong> Players act in order. Please wait until the current player finishes (Hit or Stand) before the next player acts. </li>
+              <li><strong>Dealer:</strong> Dealer reveals and plays after all players finish; stands on all 17.</li>
+              <li><strong>Payouts:</strong> Blackjack pays 3:2; push on ties. Default bet is <strong>10</strong>. </li>
+            </ol>
+            <ol class="muted" style="margin-top:6px;">
+              <li><strong>如何开始：</strong> 至少 1–10 名玩家加入后，点击 <em>开始发牌</em>。 </li>
+              <li><strong>轮流操作：</strong> 玩家按顺序操作。请等待上一位玩家完成（要牌或停牌）后再进行。</li>
+              <li><strong>庄家：</strong> 所有玩家结束后，庄家亮牌并操作；所有 17 都停牌。</li>
+              <li><strong>结算：</strong> 天生黑杰克按 3:2 赔付；平局为推注。默认下注 <strong>10</strong>。</li>
+            </ol>
           </div>
         </div>
       </div>
@@ -96,6 +158,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="./client.js"></script>
+  <script src="./client.js?v=dealer-status-1"></script>
 </body>
 </html>
