@@ -72,19 +72,16 @@ socket.on('state', (s) => {
   render();
 });
 
-// Ready (start) -> requires all players to press
 startBtn.onclick = () => {
   startBtn.disabled = true;
   startBtn.textContent = 'Ready ✓ / 已准备';
   socket.emit('ready');
 };
 
-// Player actions
 hitBtn.onclick = () => socket.emit('hit');
 standBtn.onclick = () => socket.emit('stand');
 newRoundBtn.onclick = () => socket.emit('newRound');
 
-// Edit bankroll/bet
 updateBetBtn.onclick = () => {
   const val = parseInt(editBet.value, 10);
   if (!Number.isFinite(val) || val < 1) {
@@ -101,16 +98,26 @@ updateBankrollBtn.onclick = () => {
   }
   socket.emit('setBankroll', val);
 };
-
-// All-in: bet = bankroll
 allInBetBtn.onclick = () => socket.emit('allIn');
 
-// ---- Render ----
+// ---- Card renderer (PNG) ----
 function renderCard(c) {
-  const span = document.createElement('span');
-  span.className = 'cardchip';
-  span.textContent = c.suit ? `${c.rank}${c.suit}` : c.rank;
-  return span;
+  const img = document.createElement('img');
+  img.className = 'cardimg';
+
+  // Masked cards (dealer hole or other players' hole)
+  if (c.rank === '❓' || c.rank === '■') {
+    img.src = '/cards/back.png';
+    img.alt = 'Card back';
+    return img;
+  }
+
+  const suitMap = { '♠':'S', '♥':'H', '♦':'D', '♣':'C' };
+  const s = suitMap[c.suit] || 'S';
+  const r = c.rank; // 'A','2'..'10','J','Q','K'
+  img.src = `/cards/${r}${s}.png`;
+  img.alt = `${r}${s}`;
+  return img;
 }
 
 function render() {
@@ -132,7 +139,7 @@ function render() {
     dealerTotalEl.textContent = 'Dealer total / 庄家点数: —';
   }
 
-  // Dealer status banner
+  // Dealer banner
   dealerStatus.innerHTML = '';
   const showDealerBanner = snapshot.state === 'dealerTurn' || snapshot.state === 'settling';
   if (showDealerBanner) {
@@ -140,13 +147,14 @@ function render() {
     const anyPlayerBJ = snapshot.players?.some(p => p.blackjack);
     let cls = 'result-info';
     let label = snapshot.dealerTotal != null
-      ? `Dealer stands at ${snapshot.dealerTotal} / 庄家停在 ${snapshot.dealerTotal}` : 'Dealer acts / 庄家行动';
+      ? `Dealer stands at ${snapshot.dealerTotal} / 庄家停在 ${snapshot.dealerTotal}`
+      : 'Dealer acts / 庄家行动';
 
     if (snapshot.dealerBust) {
       cls = 'result-lose';
       label = 'Dealer Bust / 庄家爆牌';
     } else if (dealerBJ && anyPlayerBJ) {
-      cls = 'result-push'; // simultaneous BJs show green
+      cls = 'result-push';
       label = 'Push with player blackjack / 与玩家天生黑杰克平局';
     } else if (dealerBJ) {
       cls = 'result-blackjack';
@@ -182,7 +190,6 @@ function render() {
     p.hand.forEach(c => handEl.appendChild(renderCard(c)));
     wrap.appendChild(handEl);
 
-    // Big result banner during settling
     if (snapshot.state === 'settling' && p.outcome) {
       const banner = document.createElement('div');
       const { cssClass, label } = outcomeStyle(p.outcome);
@@ -194,7 +201,6 @@ function render() {
       wrap.appendChild(banner);
     }
 
-    // Bankroll as boxed badge
     const bank = document.createElement('div');
     bank.className = 'stat-badge';
     bank.textContent = `Bankroll / 资金: ${typeof p.bankroll==='number' ? p.bankroll : '—'}`;
@@ -203,12 +209,12 @@ function render() {
     playersDiv.appendChild(wrap);
   });
 
-  // My pills + prefill editors
+  // My pills + editors
   const meFull = snapshot.players.find(p => me && p.id === me.id);
   bankrollPill.textContent = `Bankroll / 资金: ${meFull ? meFull.bankroll : '—'}`;
   betPill.textContent = `Bet / 下注: ${meFull ? meFull.bet : '—'}`;
 
-  // Ready UI: waiting state only
+  // Ready control
   const canReady = snapshot.state === 'waiting' && !!meFull && meFull.bet >= 1 && meFull.bet <= meFull.bankroll;
   if (canReady && !meFull.ready) {
     startBtn.disabled = false;
@@ -221,7 +227,7 @@ function render() {
     startBtn.textContent = 'Ready / 准备';
   }
 
-  // Editing allowed only while waiting and not yet ready
+  // Editability
   const canEdit = snapshot.state === 'waiting' && !!meFull && !meFull.ready;
   editBet.disabled = !canEdit;
   editBankroll.disabled = !canEdit;
@@ -234,7 +240,7 @@ function render() {
     if (meFull && document.activeElement !== editBankroll) editBankroll.value = meFull.bankroll ?? '';
   }
 
-  // Action buttons: simultaneous phase
+  // Action buttons
   const canAct = (snapshot.state === 'playersAct' && meFull && !meFull.done && !meFull.busted && !meFull.blackjack);
   hitBtn.disabled = !canAct;
   standBtn.disabled = !canAct;
@@ -264,3 +270,29 @@ function outcomeStyle(outcome) {
   if (o.includes('bust'))      return { cssClass: 'result-bust',      label: 'Bust / 爆牌' };
   return { cssClass: 'result-info', label: outcome };
 }
+
+// ---- Preload PNGs to reduce flicker ----
+(() => {
+  const preload = [];
+  ['S','H','D','C'].forEach(s=>{
+    ['A','2','3','4','5','6','7','8','9','10','J','Q','K'].forEach(r=>{
+      const i = new Image(); i.src = `/cards/${r}${s}.png`; preload.push(i);
+    });
+  });
+  const back = new Image(); back.src = '/cards/back.png'; preload.push(back);
+})();
+
+// Make card height ≈ 2× the "Update Bet" button height
+(function(){
+  const btn = document.querySelector('#updateBetBtn');
+  const set = () => {
+    if (!btn) return;
+    const h = btn.offsetHeight || 40;
+    const root = document.documentElement;
+    root.style.setProperty('--card-h-mobile', (h * 2) + 'px');
+    root.style.setProperty('--card-h-desktop', (h * 2.2) + 'px'); // a tad larger on desktop
+  };
+  window.addEventListener('resize', set);
+  set();
+})();
+

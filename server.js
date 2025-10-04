@@ -54,12 +54,12 @@ function handValue(hand) {
   }
   let softAces = aces;
   while (total > 21 && softAces > 0) { total -= 10; softAces--; }
-  const isSoft = softAces > 0; // at least one Ace still 11
+  const isSoft = softAces > 0;
   return { total, isSoft };
 }
 
 function dealOne(to) {
-  if (table.deck.length === 0) return; // no reshuffle mid-hand
+  if (table.deck.length === 0) return;
   to.push(table.deck.pop());
 }
 
@@ -69,7 +69,7 @@ function clampInt(n, min, max) {
   return Math.min(Math.max(x, min), max);
 }
 
-// ----- View (masking + derived fields) -----
+// ----- View -----
 function makeViewFor(playerId, revealAll = false) {
   const dealerVisible = (table.state === 'dealerTurn' || table.state === 'settling') || revealAll;
 
@@ -111,10 +111,10 @@ function makeViewFor(playerId, revealAll = false) {
 
 function broadcast() {
   const revealAll = (table.state === 'settling');
-  io.emit('state', makeViewFor(null, revealAll)); // public snapshot
+  io.emit('state', makeViewFor(null, revealAll));
   if (!revealAll) {
     for (const p of table.players) {
-      io.to(p.id).emit('state', makeViewFor(p.id, false)); // personalized during round
+      io.to(p.id).emit('state', makeViewFor(p.id, false));
     }
   }
 }
@@ -122,7 +122,6 @@ function broadcast() {
 function canStart() {
   return table.players.length >= MIN_PLAYERS && table.players.length <= MAX_PLAYERS;
 }
-
 function everyoneReady() {
   return canStart() && table.players.every(p => p.ready === true);
 }
@@ -139,7 +138,6 @@ function resetRound() {
     p.blackjack = false;
     p.standing = false;
     p.outcome = null;
-    // keep bankroll/bet, clamp and ensure bet<=bankroll
     if (typeof p.bankroll !== 'number' || p.bankroll < 1) p.bankroll = DEFAULT_BANKROLL;
     if (typeof p.bet !== 'number' || p.bet < 1) p.bet = BASE_BET;
     if (p.bet > p.bankroll) p.bet = p.bankroll;
@@ -148,17 +146,16 @@ function resetRound() {
 
 function maybeAdvanceToDealer() {
   if (table.state !== 'playersAct') return;
-
   const allLocked =
     table.players.length === 0 ||
     table.players.every(p => p.blackjack || p.done || p.busted);
 
   if (allLocked) {
     table.state = 'dealerTurn';
-    broadcast();          // refresh before dealer plays
+    broadcast();
     dealerPlayThenSettle();
   } else {
-    broadcast();          // still in playersAct—show bust/stand immediately
+    broadcast();
   }
 }
 
@@ -167,13 +164,11 @@ function startRound() {
   table.state = 'dealing';
   resetRound();
 
-  // Initial deal
   for (let i = 0; i < 2; i++) {
     for (const p of table.players) dealOne(p.hand);
     dealOne(table.dealer.hand);
   }
 
-  // Naturals
   for (const p of table.players) {
     const hv = handValue(p.hand);
     p.blackjack = (p.hand.length === 2 && hv.total === 21);
@@ -184,7 +179,7 @@ function startRound() {
     table.state = 'dealerTurn';
     dealerPlayThenSettle();
   } else {
-    table.state = 'playersAct'; // simultaneous actions
+    table.state = 'playersAct';
     broadcast();
   }
 }
@@ -197,7 +192,6 @@ function dealerPlayThenSettle() {
     return hv;
   };
 
-  // Reveal hole card to everyone
   broadcast();
 
   while (true) {
@@ -259,7 +253,6 @@ function tryStartIfEveryoneReady() {
 
 // ----- Socket handlers -----
 io.on('connection', (socket) => {
-  // Join with optional name/bankroll/bet
   socket.on('join', (payload) => {
     if (table.players.length >= MAX_PLAYERS) {
       socket.emit('errorMessage', `Table is full (max ${MAX_PLAYERS} players).`);
@@ -298,21 +291,16 @@ io.on('connection', (socket) => {
     broadcast();
   });
 
-  // Ready confirmation (single click to set true)
   socket.on('ready', () => {
     if (table.state !== 'waiting') return;
     const p = table.players.find(pl => pl.id === socket.id);
     if (!p) return;
-
-    // Ensure valid before ready
     if (p.bet < 1) p.bet = 1;
     if (p.bet > p.bankroll) p.bet = p.bankroll;
-
     p.ready = true;
     tryStartIfEveryoneReady();
   });
 
-  // Edit bet/bankroll only while waiting; editing un-readies the player
   socket.on('setBet', (betVal) => {
     if (table.state !== 'waiting') return;
     const p = table.players.find(pl => pl.id === socket.id);
@@ -323,7 +311,7 @@ io.on('connection', (socket) => {
       return;
     }
     p.bet = bet;
-    p.ready = false; // editing cancels ready
+    p.ready = false;
     broadcast();
   });
 
@@ -338,21 +326,19 @@ io.on('connection', (socket) => {
     }
     p.bankroll = roll;
     if (p.bet > p.bankroll) p.bet = p.bankroll;
-    p.ready = false; // editing cancels ready
+    p.ready = false;
     broadcast();
   });
 
-  // All-in sets bet = bankroll (waiting only)
   socket.on('allIn', () => {
     if (table.state !== 'waiting') return;
     const p = table.players.find(pl => pl.id === socket.id);
     if (!p) return;
     p.bet = Math.max(1, p.bankroll);
-    p.ready = false; // change requires ready again
+    p.ready = false;
     broadcast();
   });
 
-  // Simultaneous actions
   socket.on('hit', () => {
     if (table.state !== 'playersAct') return;
     const p = table.players.find(pp => pp.id === socket.id);
@@ -363,7 +349,7 @@ io.on('connection', (socket) => {
     if (hv.total > 21) {
       p.busted = true;
       p.done = true;
-      broadcast();          // show bust immediately
+      broadcast();
       maybeAdvanceToDealer();
     } else {
       broadcast();
@@ -377,11 +363,10 @@ io.on('connection', (socket) => {
 
     p.standing = true;
     p.done = true;
-    broadcast();            // reflect stand instantly
+    broadcast();
     maybeAdvanceToDealer();
   });
 
-  // Begin next round (back to waiting; everyone un-ready)
   socket.on('newRound', () => {
     if (table.state !== 'settling') return;
     table.state = 'waiting';
@@ -397,7 +382,7 @@ io.on('connection', (socket) => {
       p.outcome = null;
       if (p.bet < 1) p.bet = 1;
       if (p.bet > p.bankroll) p.bet = p.bankroll;
-      p.ready = false; // new round: must press Ready again
+      p.ready = false;
     });
     broadcast();
   });
@@ -419,7 +404,6 @@ io.on('connection', (socket) => {
       } else if (table.state === 'playersAct') {
         maybeAdvanceToDealer();
       } else if (table.state === 'waiting') {
-        // if someone leaves in waiting, just re-check readiness
         tryStartIfEveryoneReady();
       }
       broadcast();

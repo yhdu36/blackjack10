@@ -18,7 +18,31 @@
     .dealer, .players { background: rgba(255,255,255,0.02); border-radius: 12px; padding: 12px; }
     .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; margin: 4px 0 12px; }
     .hand { display:flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .cardchip { background:#0e2a2d; color:#c9f7f6; border:1px solid rgba(91,192,190,.4); padding:4px 10px; border-radius:999px; font-size:12px; }
+
+    /* image cards *//* Smaller card size ~ 2× a typical button */
+    :root{
+      --card-h-mobile: 80px;   /* was 120 */
+      --card-h-desktop: 100px; /* was 170 */
+    }
+    .cardimg{
+      border-radius: 8px;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.15);
+      height: var(--card-h-mobile);
+      width: calc(var(--card-h-mobile) * 0.89);
+      object-fit: contain;
+      background: #0a0a0a;
+    }
+    @media (min-width:980px){
+      .cardimg{
+        height: var(--card-h-desktop);
+        width: calc(var(--card-h-desktop) * 0.89);
+      }
+    }
+    /* Optional: keep hands tidy */
+    .hand{ gap:6px; overflow-x:auto; padding-bottom:4px; }
+
+
     .controls { display:flex; gap:8px; flex-wrap: wrap; }
     button { background: var(--accent); color: #0b1b1b; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 700; cursor: pointer; }
     button.ghost { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
@@ -35,14 +59,14 @@
     .hstack { display:flex; align-items:center; gap:8px; }
     #players { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; }
 
-    /* Small stat badges (boxed look) */
+    /* Small stat badges */
     .stat-badge {
       display:inline-block; padding:6px 10px; border-radius:10px;
       border:1px solid rgba(255,255,255,0.18); background:#0f1e3f; color:#dfe7ff; font-size:12px;
     }
     .stat-accent { border-color: rgba(91,192,190,.45); }
 
-    /* Big result banners */
+    /* Result banners */
     .result-banner {
       margin-top: 10px;
       padding: 10px 12px;
@@ -66,7 +90,7 @@
 
     /* Yellow All-in button */
     .btn-allin {
-      background: #ffda3a; /* yellow */
+      background: #ffda3a;
       color: #251e00;
       border: 1px solid rgba(255, 218, 58, 0.6);
     }
@@ -134,12 +158,10 @@
           <div class="hstack" style="margin:8px 0 14px;">
             <input id="editBet" type="number" min="1" step="1" placeholder="Bet for next round / 下一局下注" />
             <button id="updateBetBtn" class="ghost">Update Bet / 更新下注</button>
-            <!-- Yellow All-in button on the same line -->
             <button id="allInBetBtn" class="btn-allin">All-in / 全下</button>
           </div>
 
           <div class="controls" style="margin-bottom:8px;">
-            <!-- Ready button (id kept as startBtn for JS wiring) -->
             <button id="startBtn" class="ghost">Ready / 准备</button>
             <button id="hitBtn">Hit / 要牌</button>
             <button id="standBtn">Stand / 停牌</button>
@@ -167,6 +189,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="./client.js?v=ready-allin-2"></script>
+  <script src="./client.js?v=png-cards-1"></script>
 </body>
 </html>
